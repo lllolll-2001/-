@@ -1,0 +1,210 @@
+let users = [{login:'boss', password:'123', role:'boss'}];
+let records = [];
+let currentUser = null;
+let bossFilter = 'day';
+
+function fillTimeSelect() {
+  const select = document.getElementById('guestTime');
+  select.innerHTML = '';
+  for(let h=8; h<17; h++){
+    select.innerHTML += `<option>${h}:00</option>`;
+    select.innerHTML += `<option>${h}:50</option>`;
+  }
+}
+fillTimeSelect();
+
+document.getElementById('guestDate').min = new Date().toISOString().split('T')[0];
+
+const priceTable = {
+  'Легковая': { '13-15': {balance:400, full:600}, '16-18': {balance:480, full:720}, '19-21': {balance:560, full:840} },
+  'Кроссовер': { '13-15': {balance:440, full:680}, '16-18': {balance:520, full:800}, '19-21': {balance:600, full:920} },
+  'Внедорожник': { '13-15': {balance:480, full:740}, '16-18': {balance:560, full:860}, '19-21': {balance:640, full:980} },
+  'Микроавтобус': { '13-15': {balance:440, full:680}, '16-18': {balance:520, full:800}, '19-21': {balance:600, full:920} },
+  'Грузовые': { '13-15': {balance:480, full:740}, '16-18': {balance:560, full:860}, '19-21': {balance:640, full:980} },
+  'Коммерческий транспорт': {}
+};
+
+function getRadiusRange(radius){
+  const r = parseInt(radius.replace('R',''));
+  if(r>=13 && r<=15) return '13-15';
+  if(r>=16 && r<=18) return '16-18';
+  if(r>=19 && r<=21) return '19-21';
+  return '';
+}
+
+function updatePrice(){
+  const car = document.getElementById('guestCarType').value;
+  const radius = document.getElementById('radiusSelect').value;
+  const service = document.getElementById('serviceSelect').value;
+  const range = getRadiusRange(radius);
+  let priceText = '-';
+  if(priceTable[car] && priceTable[car][range]){
+    if(service.includes('с')) priceText = priceTable[car][range].full + ' грн';
+    else if(service.includes('Балансировка')) priceText = priceTable[car][range].balance + ' грн';
+  }
+  document.getElementById('priceDisplay').innerText = priceText;
+}
+
+document.getElementById('guestCarType').addEventListener('change', updatePrice);
+document.getElementById('radiusSelect').addEventListener('change', updatePrice);
+document.getElementById('serviceSelect').addEventListener('change', updatePrice);
+
+function addGuestRecord(){
+  const name = document.getElementById('guestName').value.trim();
+  const phone = document.getElementById('guestPhone').value.trim();
+  const car = document.getElementById('guestCarType').value;
+  const radius = document.getElementById('radiusSelect').value;
+  const service = document.getElementById('serviceSelect').value;
+  const date = document.getElementById('guestDate').value;
+  const time = document.getElementById('guestTime').value;
+
+  if(!name || !phone || !date || !time){ alert('Заполните все поля!'); return; }
+
+  const conflict = records.find(r => r.date === date && r.time === time);
+  if(conflict){ alert(`Время ${time} на ${date} уже занято.`); return; }
+
+  const id = Date.now();
+  records.push({id, name, phone, car, radius, service, date, time, status:'Не отмечено', addedBy:'Гость', workDescription:'', earned:0});
+  alert('Запись добавлена!');
+  updatePrice();
+}
+
+function login(){
+  const loginVal = document.getElementById('loginInput').value.trim();
+  const passVal = document.getElementById('passwordInput').value.trim();
+  const user = users.find(u => u.login===loginVal && u.password===passVal);
+  if(user){
+    currentUser=user;
+    document.getElementById('logoutBtn').classList.remove('hidden');
+    document.getElementById('loginCard').classList.add('hidden');
+    if(user.role==='boss') showBossView();
+    else showWorkerView();
+  } else alert('Неверный логин или пароль');
+}
+
+function logout(){
+  currentUser=null;
+  document.getElementById('bossCard').classList.add('hidden');
+  document.getElementById('workerCard').classList.add('hidden');
+  document.getElementById('logoutBtn').classList.add('hidden');
+  document.getElementById('loginCard').classList.remove('hidden');
+}
+
+function changeCredentials(){
+  const newLogin=prompt("Новый логин:", currentUser.login);
+  const newPass=prompt("Новый пароль:", currentUser.password);
+  if(newLogin && newPass){ currentUser.login=newLogin; currentUser.password=newPass; alert("Логин и пароль изменены"); }
+}
+
+function createWorker(){
+  const login=prompt("Логин работника:");
+  const password=prompt("Пароль работника:");
+  if(login && password){ users.push({login,password,role:'worker'}); alert("Работник создан!"); }
+}
+
+function addWork(id){
+  const rec = records.find(r=>r.id===id);
+  if(!rec) return;
+  const workDesc = prompt("Что выполнено?");
+  if(workDesc===null) return;
+  const earnedStr = prompt("Сколько заработано (грн)?");
+  if(earnedStr===null) return;
+  const earned = parseFloat(earnedStr);
+  if(isNaN(earned)){alert("Введите число"); return;}
+  rec.workDescription = workDesc;
+  rec.earned = earned;
+  rec.addedBy = currentUser.login;
+  renderWorkerRecords();
+  renderBossRecords();
+}
+
+// Новая функция: добавить работу без записи
+function addWorkWithoutRecord(){
+  const name = prompt("Введите имя клиента:");
+  if(!name) return;
+  const phone = prompt("Введите телефон клиента:");
+  if(!phone) return;
+  const workDesc = prompt("Что выполнено?");
+  if(workDesc===null) return;
+  const earnedStr = prompt("Сколько заработано (грн)?");
+  if(earnedStr===null) return;
+  const earned = parseFloat(earnedStr);
+  if(isNaN(earned)){ alert("Введите число"); return; }
+
+  const id = Date.now();
+  records.push({
+    id, name, phone, car:'-', radius:'-', service:'-', date:'-', time:'-', 
+    status:'Сделано', addedBy: currentUser.login, workDescription: workDesc, earned
+  });
+  renderWorkerRecords();
+  renderBossRecords();
+}
+
+function showWorkerView(){
+  document.getElementById('workerCard').classList.remove('hidden'); 
+  renderWorkerRecords();
+}
+
+function showBossView(){
+  document.getElementById('bossCard').classList.remove('hidden'); 
+  renderBossRecords();
+}
+
+function markRecord(id,status){ 
+  const rec=records.find(r=>r.id===id); 
+  if(rec){ 
+    rec.status=status; 
+    rec.addedBy=currentUser.login; 
+    renderWorkerRecords(); 
+    renderBossRecords(); 
+  }
+}
+
+function renderWorkerRecords(){
+  const container=document.getElementById('workerRecords'); container.innerHTML='';
+
+  // Кнопка для добавления работы без записи
+  const freeWorkBtn=document.createElement('button');
+  freeWorkBtn.innerText="Добавить работу без записи";
+  freeWorkBtn.onclick=()=>addWorkWithoutRecord();
+  container.appendChild(freeWorkBtn);
+
+  records.forEach(r=>{
+    const div=document.createElement('div'); div.className='record';
+    div.innerHTML=`<b>${r.name}</b> | ${r.phone} | ${r.car} | ${r.radius} | ${r.service} | ${r.date} ${r.time}
+      <div class="meta">Статус: ${r.status} | Отметил: ${r.addedBy} | Работа: ${r.workDescription || '-'} | Заработано: ${r.earned || 0} грн</div>
+      <div class="controls">
+        <button onclick="markRecord(${r.id},'Сделано')">Сделано</button>
+        <button onclick="markRecord(${r.id},'Не приехал')">Не приехал</button>
+        <button onclick="addWork(${r.id})">Добавить работу</button>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+function setBossFilter(f){ bossFilter=f; renderBossRecords(); }
+
+function renderBossRecords(){
+  const container=document.getElementById('bossRecords'); container.innerHTML='';
+  let total=0; const now=new Date();
+  const filterFunc=r=>{
+    const recDate=new Date(r.date);
+    if(bossFilter==='day') return recDate.toDateString()===now.toDateString();
+    if(bossFilter==='week'){ const weekStart=new Date(now); weekStart.setDate(now.getDate()-now.getDay()); const weekEnd=new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6); return recDate>=weekStart && recDate<=weekEnd; }
+    if(bossFilter==='month') return recDate.getMonth()===now.getMonth() && recDate.getFullYear()===now.getFullYear();
+  };
+  records.filter(filterFunc).forEach(r=>{
+    const div=document.createElement('div'); div.className='record';
+    const range=getRadiusRange(r.radius);
+    let price=0;
+    if(priceTable[r.car] && priceTable[r.car][range]){
+      if(r.service.includes('с')) price=priceTable[r.car][range].full;
+      else if(r.service.includes('Балансировка')) price=priceTable[r.car][range].balance;
+    }
+    total += price + (r.earned||0);
+    div.innerHTML=`<b>${r.name}</b> | ${r.phone} | ${r.car} | ${r.radius} | ${r.service} | ${r.date} ${r.time}
+      <div class="meta">Статус: ${r.status} | Отметил: ${r.addedBy} | Работа: ${r.workDescription || '-'} | Цена: ${price>0?price+' грн':'-'} | Заработано: ${r.earned||0} грн</div>`;
+    container.appendChild(div);
+  });
+  document.getElementById('bossTotal').innerText='Сумма: '+total+' грн';
+}
